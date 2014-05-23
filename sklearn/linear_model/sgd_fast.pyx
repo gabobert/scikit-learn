@@ -337,6 +337,7 @@ def plain_sgd(np.ndarray[double, ndim=1, mode='c'] weights,
               double l1_ratio,
               SequentialDataset dataset,
               int n_iter, int fit_intercept,
+              int batch_size,
               int verbose, bint shuffle, np.uint32_t seed,
               double weight_pos, double weight_neg,
               int learning_rate, double eta0,
@@ -368,6 +369,8 @@ def plain_sgd(np.ndarray[double, ndim=1, mode='c'] weights,
         The number of iterations (epochs).
     fit_intercept : int
         Whether or not to fit the intercept (1 or 0).
+    n_batch: int
+        The number of batches for mini-batch sgd.
     verbose : int
         Print verbose output; 0 for quite.
     shuffle : boolean
@@ -427,6 +430,8 @@ def plain_sgd(np.ndarray[double, ndim=1, mode='c'] weights,
     cdef unsigned int i = 0
     cdef int is_hinge = isinstance(loss, Hinge)
 
+    cdef int batch_size = int(n_samples / n_batch)
+
     # q vector is only used for L1 regularization
     cdef np.ndarray[double, ndim = 1, mode = "c"] q = None
     cdef double * q_data_ptr = NULL
@@ -450,23 +455,24 @@ def plain_sgd(np.ndarray[double, ndim=1, mode='c'] weights,
                     print("-- Epoch %d" % (epoch + 1))
             if shuffle:
                 dataset.shuffle(seed)
-            for i in range(n_samples):
-                dataset.next(&x_data_ptr, &x_ind_ptr, &xnnz, &y, &sample_weight)
+            for j in range(n_batch):
+                batch_loss, batch_dloss = 0
+                for i in range(batch_size):
+                    dataset.next(&x_data_ptr, &x_ind_ptr, &xnnz, &y, &sample_weight)
 
-                p = w.dot(x_data_ptr, x_ind_ptr, xnnz) + intercept
+                    p = w.dot(x_data_ptr, x_ind_ptr, xnnz) + intercept
 
-                if learning_rate == OPTIMAL:
-                    eta = 1.0 / (alpha * t)
-                elif learning_rate == INVSCALING:
-                    eta = eta0 / pow(t, power_t)
 
-                if verbose > 0:
-                    sumloss += loss.loss(p, y)
+                    if verbose > 0:
+                        sumloss += loss.loss(p, y)
 
-                if y > 0.0:
-                    class_weight = weight_pos
-                else:
-                    class_weight = weight_neg
+                    if y > 0.0:
+                        class_weight = weight_pos
+                    else:
+                        class_weight = weight_neg
+
+                    batch_loss += loss.loss(p,y)
+                    batch_dloss += loss._dloss(p,y)
 
                 if learning_rate == PA1:
                     update = sqnorm(x_data_ptr, x_ind_ptr, xnnz)
@@ -501,6 +507,11 @@ def plain_sgd(np.ndarray[double, ndim=1, mode='c'] weights,
                     l1penalty(w, q_data_ptr, x_ind_ptr, xnnz, u)
                 t += 1
                 count += 1
+
+                if learning_rate == OPTIMAL:
+                    eta = 1.0 / (alpha * t)
+                elif learning_rate == INVSCALING:
+                    eta = eta0 / pow(t, power_t)
 
             # report epoch information
             if verbose > 0:
