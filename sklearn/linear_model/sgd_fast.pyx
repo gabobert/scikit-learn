@@ -431,6 +431,12 @@ def plain_sgd(np.ndarray[double, ndim=1, mode='c'] weights,
     cdef int is_hinge = isinstance(loss, Hinge)
 
     cdef int batch_size = int(n_samples / n_batch)
+    cdef double batch_loss = 0.0
+    cdef double batch_dloss = 0.0
+    cdef np.ndarray[double, ndim=1, mode="c"] zero_vector = np.zeros((n_features,),dtype=np.float64, order="c")
+    cdef WeightVector batch_sum = WeightVector(zero_vector)
+#     cdef np.ndarray[double, ndim=1, mode="c"] batch_sum = np.zeros((n_features,), dtype=np.float64, order="c")
+#     batch_sum_ptr = <double *> batch_sum.data
 
     # q vector is only used for L1 regularization
     cdef np.ndarray[double, ndim = 1, mode = "c"] q = None
@@ -456,7 +462,8 @@ def plain_sgd(np.ndarray[double, ndim=1, mode='c'] weights,
             if shuffle:
                 dataset.shuffle(seed)
             for j in range(n_batch):
-                batch_loss, batch_dloss = 0
+#                 batch_loss, batch_dloss = 0
+#                 batch_sum.__cinit__(zero_vector)
                 for i in range(batch_size):
                     dataset.next(&x_data_ptr, &x_ind_ptr, &xnnz, &y, &sample_weight)
 
@@ -473,17 +480,19 @@ def plain_sgd(np.ndarray[double, ndim=1, mode='c'] weights,
 
                     batch_loss += loss.loss(p,y)
                     batch_dloss += loss._dloss(p,y)
+                    batch_sum.add(x_data_ptr, x_ind_ptr, xnnz, 1.0)
+
 
                 if learning_rate == PA1:
                     update = sqnorm(x_data_ptr, x_ind_ptr, xnnz)
                     if update == 0:
                         continue
-                    update = min(C, loss.loss(p, y) / update)
+                    update = min(C, batch_loss / update)
                 elif learning_rate == PA2:
                     update = sqnorm(x_data_ptr, x_ind_ptr, xnnz)
-                    update = loss.loss(p, y) / (update + 0.5 / C)
+                    update = batch_loss / (update + 0.5 / C)
                 else:
-                    update = -eta * loss._dloss(p, y)
+                    update = -eta * batch_dloss
 
                 if learning_rate >= PA1:
                     if is_hinge:
@@ -498,6 +507,7 @@ def plain_sgd(np.ndarray[double, ndim=1, mode='c'] weights,
                 if penalty_type >= L2:
                     w.scale(1.0 - ((1.0 - l1_ratio) * eta * alpha))
                 if update != 0.0:
+                    update /= batch_size
                     w.add(x_data_ptr, x_ind_ptr, xnnz, update)
                     if fit_intercept == 1:
                         intercept += update * intercept_decay
