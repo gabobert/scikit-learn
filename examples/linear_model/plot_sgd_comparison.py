@@ -21,13 +21,17 @@ heldout = [0.95, 0.90, 0.75, 0.50, 0.01]
 rounds = 20
 digits = datasets.load_digits()
 
+n_epoch = 5
+batch_size = 10
+n_iter = batch_size * n_epoch
+
 classifiers = [
-    ("SGD", SGDClassifier()),
-    ("Perceptron", Perceptron()),
+    ("SGD", SGDClassifier(batch_size=batch_size, n_iter=n_iter)),
+    ("Perceptron", Perceptron(batch_size=batch_size, n_iter=n_iter)),
     ("Passive-Aggressive I", PassiveAggressiveClassifier(loss='hinge',
-                                                         C=1.0)),
+                                                         C=1.0, batch_size=batch_size, n_iter=n_iter)),
     ("Passive-Aggressive II", PassiveAggressiveClassifier(loss='squared_hinge',
-                                                          C=1.0)),
+                                                          C=1.0, batch_size=batch_size, n_iter=n_iter)),
 ]
 
 xx = 1 - np.array(heldout)
