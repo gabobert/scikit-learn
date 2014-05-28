@@ -336,8 +336,8 @@ def plain_sgd(np.ndarray[double, ndim=1, mode='c'] weights,
               double alpha, double C,
               double l1_ratio,
               SequentialDataset dataset,
-              int n_iter, int fit_intercept,
-              int batch_size,
+              int n_iter, int batch_size,
+              int fit_intercept,
               int verbose, bint shuffle, np.uint32_t seed,
               double weight_pos, double weight_neg,
               int learning_rate, double eta0,
@@ -367,10 +367,10 @@ def plain_sgd(np.ndarray[double, ndim=1, mode='c'] weights,
         A concrete ``SequentialDataset`` object.
     n_iter : int
         The number of iterations (epochs).
+    batch_size: int
+        The number of point per mini-batch
     fit_intercept : int
         Whether or not to fit the intercept (1 or 0).
-    n_batch: int
-        The number of batches for mini-batch sgd.
     verbose : int
         Print verbose output; 0 for quite.
     shuffle : boolean
@@ -428,9 +428,17 @@ def plain_sgd(np.ndarray[double, ndim=1, mode='c'] weights,
     cdef unsigned int count = 0
     cdef unsigned int epoch = 0
     cdef unsigned int i = 0
+    cdef unsigned int j = 0
     cdef int is_hinge = isinstance(loss, Hinge)
+    cdef int local_batch_size
 
-    cdef int batch_size = int(n_samples / n_batch)
+
+    cdef int n_batch = int(n_samples / batch_size)
+    cdef int last_batch_size = batch_size + n_samples - (batch_size * n_batch)
+    if verbose > 0:
+        print("batch size: %d" % batch_size)
+        print("last batch size: %d" % last_batch_size)
+
     cdef double batch_loss = 0.0
     cdef double batch_dloss = 0.0
     cdef np.ndarray[double, ndim=1, mode="c"] zero_vector = np.zeros((n_features,),dtype=np.float64, order="c")
@@ -461,10 +469,14 @@ def plain_sgd(np.ndarray[double, ndim=1, mode='c'] weights,
                     print("-- Epoch %d" % (epoch + 1))
             if shuffle:
                 dataset.shuffle(seed)
+            local_batch_size = batch_size
             for j in range(n_batch):
-#                 batch_loss, batch_dloss = 0
-#                 batch_sum.__cinit__(zero_vector)
-                for i in range(batch_size):
+                batch_loss = 0
+                batch_dloss = 0
+                batch_sum.scale(0.0)
+                if j == n_batch-1:
+                    local_batch_size = last_batch_size
+                for i in range(local_batch_size):
                     dataset.next(&x_data_ptr, &x_ind_ptr, &xnnz, &y, &sample_weight)
 
                     p = w.dot(x_data_ptr, x_ind_ptr, xnnz) + intercept
@@ -482,6 +494,9 @@ def plain_sgd(np.ndarray[double, ndim=1, mode='c'] weights,
                     batch_dloss += loss._dloss(p,y)
                     batch_sum.add(x_data_ptr, x_ind_ptr, xnnz, 1.0)
 
+                batch_loss /= local_batch_size
+                batch_dloss /= local_batch_size
+                batch_sum.scale(1.0/local_batch_size)
 
                 if learning_rate == PA1:
                     update = sqnorm(x_data_ptr, x_ind_ptr, xnnz)
@@ -505,15 +520,14 @@ def plain_sgd(np.ndarray[double, ndim=1, mode='c'] weights,
                 update *= class_weight * sample_weight
 
                 if penalty_type >= L2:
-                    w.scale(1.0 - ((1.0 - l1_ratio) * eta * alpha))
+                    w.scale(1.0 - ((1.0 - l1_ratio) * eta * alpha * local_batch_size))
                 if update != 0.0:
-                    update /= batch_size
                     w.add(x_data_ptr, x_ind_ptr, xnnz, update)
                     if fit_intercept == 1:
                         intercept += update * intercept_decay
 
                 if penalty_type == L1 or penalty_type == ELASTICNET:
-                    u += (l1_ratio * eta * alpha)
+                    u += (l1_ratio * eta * alpha * local_batch_size)
                     l1penalty(w, q_data_ptr, x_ind_ptr, xnnz, u)
                 t += 1
                 count += 1

@@ -51,7 +51,7 @@ class BaseSGD(six.with_metaclass(ABCMeta, BaseEstimator, SparseCoefMixin)):
     """Base class for SGD classification and regression."""
 
     def __init__(self, loss, penalty='l2', alpha=0.0001, C=1.0,
-                 l1_ratio=0.15, fit_intercept=True, n_iter=5, shuffle=False,
+                 l1_ratio=0.15, fit_intercept=True, n_iter=5, batch_size=1, shuffle=False,
                  verbose=0, epsilon=0.1, random_state=None,
                  learning_rate="optimal", eta0=0.0, power_t=0.5,
                  warm_start=False):
@@ -64,6 +64,7 @@ class BaseSGD(six.with_metaclass(ABCMeta, BaseEstimator, SparseCoefMixin)):
         self.l1_ratio = l1_ratio
         self.fit_intercept = fit_intercept
         self.n_iter = n_iter
+        self.batch_size = batch_size
         self.shuffle = shuffle
         self.random_state = random_state
         self.verbose = verbose
@@ -93,6 +94,8 @@ class BaseSGD(six.with_metaclass(ABCMeta, BaseEstimator, SparseCoefMixin)):
             raise ValueError("shuffle must be either True or False")
         if self.n_iter <= 0:
             raise ValueError("n_iter must be > zero")
+        if self.batch_size <= 0:
+            raise ValueError("batch_size must be > zero")
         if not (0.0 <= self.l1_ratio <= 1.0):
             raise ValueError("l1_ratio must be in [0, 1]")
         if self.alpha < 0.0:
@@ -270,9 +273,9 @@ def fit_binary(est, i, X, y, alpha, C, learning_rate, n_iter,
 
     return plain_sgd(coef, intercept, est.loss_function,
                      penalty_type, alpha, C, est.l1_ratio,
-                     dataset, n_iter, int(est.fit_intercept),
-                     int(est.verbose), int(est.shuffle), seed,
-                     pos_weight, neg_weight,
+                     dataset, n_iter, int(est.batch_size),
+                     int(est.fit_intercept), int(est.verbose), int(est.shuffle),
+                     seed, pos_weight, neg_weight,
                      learning_rate_type, est.eta0,
                      est.power_t, est.t_, intercept_decay)
 
@@ -295,7 +298,7 @@ class BaseSGDClassifier(six.with_metaclass(ABCMeta, BaseSGD,
 
     @abstractmethod
     def __init__(self, loss="hinge", penalty='l2', alpha=0.0001, l1_ratio=0.15,
-                 fit_intercept=True, n_iter=5, shuffle=False, verbose=0,
+                 fit_intercept=True, n_iter=5, batch_size=1, shuffle=False, verbose=0,
                  epsilon=DEFAULT_EPSILON, n_jobs=1, random_state=None,
                  learning_rate="optimal", eta0=0.0, power_t=0.5,
                  class_weight=None, warm_start=False):
@@ -303,7 +306,8 @@ class BaseSGDClassifier(six.with_metaclass(ABCMeta, BaseSGD,
         super(BaseSGDClassifier, self).__init__(loss=loss, penalty=penalty,
                                                 alpha=alpha, l1_ratio=l1_ratio,
                                                 fit_intercept=fit_intercept,
-                                                n_iter=n_iter, shuffle=shuffle,
+                                                n_iter=n_iter, batch_size=batch_size,
+                                                shuffle=shuffle,
                                                 verbose=verbose,
                                                 epsilon=epsilon,
                                                 random_state=random_state,
@@ -627,14 +631,14 @@ class SGDClassifier(BaseSGDClassifier, _LearntSelectorMixin):
     """
 
     def __init__(self, loss="hinge", penalty='l2', alpha=0.0001, l1_ratio=0.15,
-                 fit_intercept=True, n_iter=5, shuffle=False, verbose=0,
-                 epsilon=DEFAULT_EPSILON, n_jobs=1, random_state=None,
-                 learning_rate="optimal", eta0=0.0, power_t=0.5,
-                 class_weight=None, warm_start=False):
+                 fit_intercept=True, n_iter=5, batch_size=1, shuffle=False,
+                 verbose=0, epsilon=DEFAULT_EPSILON, n_jobs=1,
+                 random_state=None, learning_rate="optimal", eta0=0.0,
+                 power_t=0.5, class_weight=None, warm_start=False):
         super(SGDClassifier, self).__init__(
             loss=loss, penalty=penalty, alpha=alpha, l1_ratio=l1_ratio,
-            fit_intercept=fit_intercept, n_iter=n_iter, shuffle=shuffle,
-            verbose=verbose, epsilon=epsilon, n_jobs=n_jobs,
+            fit_intercept=fit_intercept, n_iter=n_iter, batch_size=batch_size,
+            shuffle=shuffle, verbose=verbose, epsilon=epsilon, n_jobs=n_jobs,
             random_state=random_state, learning_rate=learning_rate, eta0=eta0,
             power_t=power_t, class_weight=class_weight, warm_start=warm_start)
 
@@ -761,15 +765,16 @@ class BaseSGDRegressor(BaseSGD, RegressorMixin):
 
     @abstractmethod
     def __init__(self, loss="squared_loss", penalty="l2", alpha=0.0001,
-                 l1_ratio=0.15, fit_intercept=True, n_iter=5, shuffle=False,
-                 verbose=0, epsilon=DEFAULT_EPSILON, random_state=None,
-                 learning_rate="invscaling", eta0=0.01, power_t=0.25,
-                 warm_start=False):
+                 l1_ratio=0.15, fit_intercept=True, n_iter=5, batch_size=1,
+                 shuffle=False, verbose=0, epsilon=DEFAULT_EPSILON,
+                 random_state=None, learning_rate="invscaling", eta0=0.01,
+                 power_t=0.25, warm_start=False):
         super(BaseSGDRegressor, self).__init__(loss=loss, penalty=penalty,
                                                alpha=alpha, l1_ratio=l1_ratio,
                                                fit_intercept=fit_intercept,
-                                               n_iter=n_iter, shuffle=shuffle,
-                                               verbose=verbose,
+                                               n_iter=n_iter,
+                                               batch_size=batch_size,
+                                               shuffle=shuffle, verbose=verbose,
                                                epsilon=epsilon,
                                                random_state=random_state,
                                                learning_rate=learning_rate,
@@ -930,7 +935,7 @@ class BaseSGDRegressor(BaseSGD, RegressorMixin):
                                           alpha, C,
                                           self.l1_ratio,
                                           dataset,
-                                          n_iter,
+                                          n_iter, int(self.batch_size),
                                           int(self.fit_intercept),
                                           int(self.verbose),
                                           int(self.shuffle),
@@ -1058,14 +1063,15 @@ class SGDRegressor(BaseSGDRegressor, _LearntSelectorMixin):
 
     """
     def __init__(self, loss="squared_loss", penalty="l2", alpha=0.0001,
-                 l1_ratio=0.15, fit_intercept=True, n_iter=5, shuffle=False,
-                 verbose=0, epsilon=DEFAULT_EPSILON, random_state=None,
-                 learning_rate="invscaling", eta0=0.01, power_t=0.25,
-                 warm_start=False):
+                 l1_ratio=0.15, fit_intercept=True, n_iter=5, batch_size=1,
+                 shuffle=False, verbose=0, epsilon=DEFAULT_EPSILON,
+                 random_state=None, learning_rate="invscaling", eta0=0.01,
+                 power_t=0.25, warm_start=False):
         super(SGDRegressor, self).__init__(loss=loss, penalty=penalty,
                                            alpha=alpha, l1_ratio=l1_ratio,
                                            fit_intercept=fit_intercept,
-                                           n_iter=n_iter, shuffle=shuffle,
+                                           n_iter=n_iter, batch_size=batch_size,
+                                           shuffle=shuffle,
                                            verbose=verbose,
                                            epsilon=epsilon,
                                            random_state=random_state,
