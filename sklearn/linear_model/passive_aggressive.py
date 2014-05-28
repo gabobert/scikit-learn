@@ -71,12 +71,13 @@ class PassiveAggressiveClassifier(BaseSGDClassifier):
 
     """
     def __init__(self, C=1.0, fit_intercept=True,
-                 n_iter=5, shuffle=False, verbose=0, loss="hinge",
+                 n_iter=5, batch_size=1, shuffle=False, verbose=0, loss="hinge",
                  n_jobs=1, random_state=None, warm_start=False):
         BaseSGDClassifier.__init__(self,
                                    penalty=None,
                                    fit_intercept=fit_intercept,
                                    n_iter=n_iter,
+                                   batch_size=batch_size,
                                    shuffle=shuffle,
                                    verbose=verbose,
                                    random_state=random_state,
@@ -209,8 +210,8 @@ class PassiveAggressiveRegressor(BaseSGDRegressor):
     K. Crammer, O. Dekel, J. Keshat, S. Shalev-Shwartz, Y. Singer - JMLR (2006)
 
     """
-    def __init__(self, C=1.0, fit_intercept=True, n_iter=5, shuffle=False,
-                 verbose=0, loss="epsilon_insensitive",
+    def __init__(self, C=1.0, fit_intercept=True, n_iter=5, batch_size=1,
+                 shuffle=False, verbose=0, loss="epsilon_insensitive",
                  epsilon=DEFAULT_EPSILON, random_state=None, class_weight=None,
                  warm_start=False):
         BaseSGDRegressor.__init__(self,
@@ -220,6 +221,7 @@ class PassiveAggressiveRegressor(BaseSGDRegressor):
                                   eta0=1.0,
                                   fit_intercept=fit_intercept,
                                   n_iter=n_iter,
+                                  batch_size=batch_size,
                                   shuffle=shuffle,
                                   verbose=verbose,
                                   random_state=random_state,
